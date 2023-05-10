@@ -2,7 +2,7 @@ import socket
 import json
 import sys
 import math
-import Strategy
+import copy
 
 
 # Connexion au serveur de parties
@@ -18,6 +18,7 @@ d ={
    "name": "boby-{}".format(port),
    "matricules": ["20278", "00000", port]
 }
+print(json.dumps(d))
 
 request = json.dumps(d, indent='\t').encode()
 
@@ -31,29 +32,67 @@ if ans['response'] != 'ok':
     sys.exit()
 
 # Définitions de variables et de fonctions utiles
+
+# Importé depuis le fichier game.py
+Gates = {
+    "A": {"start": 1, "end": 43, "inc": 7},
+    "B": {"start": 3, "end": 45, "inc": 7},
+    "C": {"start": 5, "end": 47, "inc": 7},
+    "D": {"start": 13, "end": 7, "inc": -1},
+    "E": {"start": 27, "end": 21, "inc": -1},
+    "F": {"start": 41, "end": 35, "inc": -1},
+    "G": {"start": 47, "end": 5, "inc": -7},
+    "H": {"start": 45, "end": 3, "inc": -7},
+    "I": {"start": 43, "end": 1, "inc": -7},
+    "J": {"start": 35, "end": 41, "inc": 1},
+    "K": {"start": 21, "end": 27, "inc": 1},
+    "L": {"start": 7, "end": 13, "inc": 1},
+}
+
+def slideTiles(board, free, gate):
+    start = Gates[gate]["start"]
+    end = Gates[gate]["end"]
+    inc = Gates[gate]["inc"]
+    new_board = copy.deepcopy(board)
+    dest = end
+    src = end - inc
+    while dest != start:
+        new_board[dest] = new_board[src]
+        dest = src
+        src -= inc
+    new_board[start] = free
+    return new_board
+
+def onTrack(index, gate):
+    return index in range(
+        Gates[gate]["start"],
+        Gates[gate]["end"] + Gates[gate]["inc"],
+        Gates[gate]["inc"],
+    )
+
 directions = ['N', 'E', 'S', 'W']
+
 def localize(tile):
-    y = 0
-    while tile > 6:
-        tile -= 7
-        y+= 1
-    x = tile
-    return (x, y)
+    return (tile % 7, tile // 7)
+
+def test_localize() :
+    assert localize(3) == (3, 0)
 
 def findNewPos(card, pos):
-    if ((card == 'N') and (pos[1]-7 >= 0)):
-        np = (pos[0], pos[1]-7)
-    elif ((card == 'S') and (pos[1]+7 <= 48)):
-        np = (pos[0], pos[1]+7)
-    elif ((card == 'W') and (pos[0] not in [0, 7, 14, 21, 28, 35, 42])) :
+    if ((card == 'N') and (pos[1]-1 >= 0)):
+        np = (pos[0], pos[1]-1)
+    elif ((card == 'S') and (pos[1]+1 <= 6)):
+        np = (pos[0], pos[1]+1)
+    elif ((card == 'W') and (pos[0] != 0)) :
         np = (pos[0]-1, pos[1])
-    elif ((card == 'E') and (pos[0] not in [6, 13, 20, 27, 34, 41, 48])) :
+    elif ((card == 'E') and (pos[0] != 6)) :
         np = (pos[0]+1, pos[1])
+    else :
+        return None
     return np
 
 def inv_localize(pos):
-    tile = pos[0] + pos[1]*7
-    return tile
+    return pos[0] + pos[1]*7
 
 def distance(pos1, pos2):
     D = math.sqrt((pos1[0]-pos2[0])**2 + (pos1[1]-pos2[1])**2)
@@ -61,10 +100,39 @@ def distance(pos1, pos2):
      
 def canCross(tile):
     poss = []
+    ways = []
     for i in directions :
-        if tile[i] :
+        print(state["board"][tile])
+        if state["board"][tile][i] :
             poss.append(i)
-    return poss
+    for j in poss :
+        if j == 'N' :
+            try :
+                if state["board"][tile-7]['S'] :
+                    ways.append(j)
+            except :
+                pass
+        if j == 'E' :
+            try :
+                if state["board"][tile+1]['W'] :
+                    ways.append(j)
+            except :
+                pass
+        if j == 'S' :
+            try :
+                if state["board"][tile+7]['N'] :
+                    ways.append(j)
+            except :
+                pass
+        if j == 'W' :
+            try :
+                if state["board"][tile-1]['E'] :
+                    ways.append(j)
+            except :
+                pass    
+    return ways
+
+gate = "C"
 
 class Queue:
 	def __init__(self):
@@ -80,6 +148,8 @@ class Queue:
 		return len(self.data) == 0
 
 def BFS(start, target):
+    if target == None :
+        return start
     targetObtainable = False
     q = Queue()
     distances = []
@@ -88,6 +158,10 @@ def BFS(start, target):
     q.enqueue(start)
     while not q.isEmpty():
         node = q.dequeue()
+        print(node)
+        print(node)
+        print(target)
+        print("NODE")
         if node == localize(target):
             targetObtainable = True
             break
@@ -97,16 +171,18 @@ def BFS(start, target):
                 distances.append((distance(successor, localize(target)), successor))
                 parent[successor] = node
                 q.enqueue(successor)
-        node = None
     if targetObtainable :
         return target
-    minDistance = 100
-    for i in distances :
-        if i[0] < minDistance :
-            minDistance = i[0]
-            bestTile = inv_localize(i[1])
-    return bestTile
-    
+    if node != None :
+        minDistance = 100
+        bestTile = playerPos
+        for i in distances :
+            print(i)
+            if i[0] < minDistance :
+                minDistance = i[0]
+                bestTile = inv_localize(i[1])
+        return bestTile
+    return playerPos
 #    path = []
 #    while node is not None:
 #        path.append(node)
@@ -117,13 +193,12 @@ def BFS(start, target):
 def successors(current_tile):
     res = []
     for i in directions:
-        if i in canCross(current_tile):
+        if i in canCross(inv_localize(current_tile)):
             np = findNewPos(i, current_tile)
-            res.append(np)
+            if np != None :
+                res.append(np)
     return res
 
-
-print(BFS((8, 1), successors, [(1, 9)]))
 
 with socket.socket() as s:
     s.bind(('', port))
@@ -134,28 +209,42 @@ with socket.socket() as s:
         try:
             client, address = s.accept()
             message = client.recv(20480).decode()
-            if message != "{\"request\": \"ping\"}" :
-                print(message)
+            answer = json.loads(message)
+            print(answer)
+            if answer["request"] == "play" :
                 answer = json.loads(message)
                 print(answer["state"])
                 state = answer["state"]
-                playerID = state["players"].index("boby-{}".format(port))
+                targetPos = None
+                state["board"] = slideTiles(state["board"], state["tile"], gate)
+                new_positions = []
+                for position in state["positions"]:
+                    if onTrack(position, gate):
+                        if position == Gates[gate]["end"]:
+                            new_positions.append(Gates[gate]["start"])
+                            continue
+                        new_positions.append(position + Gates[gate]["inc"])
+                        continue
+                    new_positions.append(position)
+                state["positions"] = new_positions
+                playerID = state["current"]
                 playerPos = state["positions"][playerID]
-                targetPos = 0
+                print(state["board"])
+                print(playerPos)
                 for tile in state["board"] :
                     if tile["item"] == state["target"] :
-                        targetPos = localize(state["board"].index(tile))
+                        targetPos = state["board"].index(tile)
                         print(targetPos)
-                if targetPos == 0 :
-                    targetPos = "Free Tile"
-                move = {
-                    "tile": answer["state"]["tile"],
-                    "gate": "A",
-                   "new_position": 45
-                  }
-                print(move)
+                        print('HELLO')
+                if targetPos == None :
+                    new_position = BFS(localize(playerPos), None)
+                else :
+                    new_position = BFS(localize(playerPos), targetPos)
+                move = {'move' :{'tile': state["tile"],'gate': gate,'new_position': int(new_position)}}
+                print(json.dumps(move, indent='\t') + 'ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZz')
+                print(state['tile'])
                 client.send(json.dumps(move).encode())
-            else :
+            elif message == "{\"request\": \"ping\"}" :
                 client.send(json.dumps({'response': 'pong'}).encode())
                 print('OK')
         except socket.timeout:
