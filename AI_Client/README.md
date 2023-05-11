@@ -4,7 +4,7 @@ The program contains the scripts of an AI made for playing Ravensburger's Labyri
 
 ## Strategy
 
-The strategy used in this program is the Breadth First Search algorithm. It seeks for every displacement possible and choose the best, based on the distance between the objective and the position, if it cannot reach the objective first.
+The strategy used in this program is the Breadth First Search algorithm. It seeks first for every displacement possible with every tile insertion possible, and choose the best, based on the distance between the objective and the final position, if it cannot reach the objective first. This program does not support tile rotation.
 
 ## Libraries
 
