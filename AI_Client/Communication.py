@@ -1,3 +1,11 @@
+
+#  ____  ______ _____            _____ 
+# |  _ \|  ____/ ____|     /\   |_   _|
+# | |_) | |__ | (___      /  \    | |  
+# |  _ <|  __| \___ \    / /\ \   | |  
+# | |_) | |    ____) |  / ____ \ _| |_ 
+# |____/|_|   |_____/  /_/    \_\_____|
+#                                      
 import socket
 import json
 import sys
@@ -5,18 +13,20 @@ import math
 import copy
 
 
-# Connexion au serveur de parties
+#---------------------------------------------------------------#
+# Etablissement de la connexion avec le gestionnaire de parties #
+#---------------------------------------------------------------#
 s = socket.socket()
 address = ('localhost', 3000)
 s.connect(address)
 
-port = int(sys.argv[1])
+port = 77
 
 d ={
    "request": "subscribe",
    "port": port,
-   "name": "boby-{}".format(port),
-   "matricules": ["20278", "00000", port]
+   "name": "Cramptes-{}".format(port),
+   "matricules": ["20278", "00000"]
 }
 print(json.dumps(d))
 
@@ -31,9 +41,13 @@ if ans['response'] != 'ok':
     print(ans)
     sys.exit()
 
-# Définitions de variables et de fonctions utiles
+#-------------------------------------------------#
+# Définitions de variables et de fonctions utiles #
+#-------------------------------------------------#
+
 
 # Importé depuis le fichier game.py
+
 Gates = {
     "A": {"start": 1, "end": 43, "inc": 7},
     "B": {"start": 3, "end": 45, "inc": 7},
@@ -49,7 +63,11 @@ Gates = {
     "L": {"start": 7, "end": 13, "inc": 1},
 }
 
+# 2 fonctions importées de game.py dans PI2CChampionshipRunner\games\labyrinthe
+
 def slideTiles(board, free, gate):
+    print(gate)
+    print(Gates[gate])
     start = Gates[gate]["start"]
     end = Gates[gate]["end"]
     inc = Gates[gate]["inc"]
@@ -70,13 +88,12 @@ def onTrack(index, gate):
         Gates[gate]["inc"],
     )
 
+# Fonctions et variables utiles pour gérer les positions
+
 directions = ['N', 'E', 'S', 'W']
 
 def localize(tile):
     return (tile % 7, tile // 7)
-
-def test_localize() :
-    assert localize(3) == (3, 0)
 
 def findNewPos(card, pos):
     if ((card == 'N') and (pos[1]-1 >= 0)):
@@ -94,10 +111,16 @@ def findNewPos(card, pos):
 def inv_localize(pos):
     return pos[0] + pos[1]*7
 
+# Calcule la distance entre deux positions
+
 def distance(pos1, pos2):
     D = math.sqrt((pos1[0]-pos2[0])**2 + (pos1[1]-pos2[1])**2)
     return D
-     
+
+#----------------------------------------------------#
+#    Analyzes the possible movements from position   #
+#----------------------------------------------------#
+
 def canCross(tile):
     poss = []
     ways = []
@@ -132,7 +155,26 @@ def canCross(tile):
                 pass    
     return ways
 
-gate = "C"
+#---------------------------------------#
+#   Board Update after tile insertion   #
+#---------------------------------------#
+
+def boardUpdate(state, gate):
+    state["board"] = slideTiles(state["board"], state["tile"], gate)
+    new_positions = []
+    for position in state["positions"]:
+        if onTrack(position, gate):
+            if position == Gates[gate]["end"]:
+                new_positions.append(Gates[gate]["start"])
+                continue
+            new_positions.append(position + Gates[gate]["inc"])
+            continue
+        new_positions.append(position)
+    state["positions"] = new_positions
+
+# -------------------------------#
+#  Best First Search Definition  #
+# -------------------------------#
 
 class Queue:
 	def __init__(self):
@@ -148,6 +190,7 @@ class Queue:
 		return len(self.data) == 0
 
 def BFS(start, target):
+    global playerPos
     if target == None :
         return start
     targetObtainable = False
@@ -158,15 +201,10 @@ def BFS(start, target):
     q.enqueue(start)
     while not q.isEmpty():
         node = q.dequeue()
-        print(node)
-        print(node)
-        print(target)
-        print("NODE")
         if node == localize(target):
             targetObtainable = True
             break
         for successor in successors(node):
-            # se rapprocher au max de la target
             if successor not in parent:
                 distances.append((distance(successor, localize(target)), successor))
                 parent[successor] = node
@@ -183,11 +221,6 @@ def BFS(start, target):
                 bestTile = inv_localize(i[1])
         return bestTile
     return playerPos
-#    path = []
-#    while node is not None:
-#        path.append(node)
-#        node = parent[node]
-#    return node
 
 
 def successors(current_tile):
@@ -199,50 +232,56 @@ def successors(current_tile):
                 res.append(np)
     return res
 
-
+#----------------------------------------#
+#                MAIN LOOP               #
+#----------------------------------------#
 with socket.socket() as s:
     s.bind(('', port))
     s.settimeout(1)
     s.listen()
-    alive = True
-    while alive:
+    while True:
         try:
             client, address = s.accept()
             message = client.recv(20480).decode()
             answer = json.loads(message)
-            print(answer)
             if answer["request"] == "play" :
                 answer = json.loads(message)
-                print(answer["state"])
                 state = answer["state"]
                 targetPos = None
-                state["board"] = slideTiles(state["board"], state["tile"], gate)
-                new_positions = []
-                for position in state["positions"]:
-                    if onTrack(position, gate):
-                        if position == Gates[gate]["end"]:
-                            new_positions.append(Gates[gate]["start"])
-                            continue
-                        new_positions.append(position + Gates[gate]["inc"])
-                        continue
-                    new_positions.append(position)
-                state["positions"] = new_positions
-                playerID = state["current"]
-                playerPos = state["positions"][playerID]
-                print(state["board"])
-                print(playerPos)
                 for tile in state["board"] :
                     if tile["item"] == state["target"] :
                         targetPos = state["board"].index(tile)
-                        print(targetPos)
-                        print('HELLO')
+                        continue
+                playerID = state["current"]
+                playerPos = state["positions"][playerID]
+                minDist = 1000
+                for gate in Gates.keys():
+                    old_board = state["board"]
+                    old_positions = state["positions"]
+                    distance_simulated = 1000
+                    boardUpdate(state, gate)
+                    if targetPos != None :
+                        distance_simulated = distance(localize(BFS(localize(state["positions"][state["current"]]), targetPos)), localize(targetPos))
+                    else :
+                        distance_simulated = 1000
+                    if distance_simulated < minDist:
+                        bestGate = gate
+                        minDist = distance_simulated
+                        bestState = state
+                    state["board"] = old_board
+                    state["positions"] = old_positions
+                try :
+                    state = bestState
+                    gate = bestGate
+                except :
+                    print('ERROR 404')
+                boardUpdate(state, gate)
+                playerPos = state["positions"][state["current"]]
                 if targetPos == None :
-                    new_position = BFS(localize(playerPos), None)
+                    new_position = inv_localize(BFS(localize(playerPos), None))
                 else :
                     new_position = BFS(localize(playerPos), targetPos)
-                move = {'move' :{'tile': state["tile"],'gate': gate,'new_position': int(new_position)}}
-                print(json.dumps(move, indent='\t') + 'ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZz')
-                print(state['tile'])
+                move = {'response':'move', 'move':{'tile': state["tile"],'gate': gate,'new_position': int(new_position)}}
                 client.send(json.dumps(move).encode())
             elif message == "{\"request\": \"ping\"}" :
                 client.send(json.dumps({'response': 'pong'}).encode())
