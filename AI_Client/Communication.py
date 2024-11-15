@@ -11,6 +11,7 @@ import json
 import sys
 import math
 import copy
+from random import randint
 
 
 #---------------------------------------------------------------#
@@ -25,7 +26,7 @@ port = 77
 d ={
    "request": "subscribe",
    "port": port,
-   "name": "Cramptes-{}".format(port),
+   "name": "quoicoubae",
    "matricules": ["20278", "00000"]
 }
 print(json.dumps(d))
@@ -231,7 +232,7 @@ def successors(current_tile):
             if np != None :
                 res.append(np)
     return res
-
+messages = ["Bebou est-ce que tu m'aimes ?", "Mais MDR quoicouflop", "pip install cringe", "Bonsoir non", "T'as les cramptés ?", "import DDOS.py"]
 #----------------------------------------#
 #                MAIN LOOP               #
 #----------------------------------------#
@@ -244,6 +245,7 @@ with socket.socket() as s:
             client, address = s.accept()
             message = client.recv(20480).decode()
             answer = json.loads(message)
+            print(answer)
             if answer["request"] == "play" :
                 answer = json.loads(message)
                 state = answer["state"]
@@ -281,7 +283,7 @@ with socket.socket() as s:
                     new_position = inv_localize(BFS(localize(playerPos), None))
                 else :
                     new_position = BFS(localize(playerPos), targetPos)
-                move = {'response':'move', 'move':{'tile': state["tile"],'gate': gate,'new_position': int(new_position)}}
+                move = {'response':'move', 'move':{'tile': state["tile"],'gate': gate,'new_position': int(new_position)}, 'message': messages[randint(0,len(messages)-1)]}
                 client.send(json.dumps(move).encode())
             elif message == "{\"request\": \"ping\"}" :
                 client.send(json.dumps({'response': 'pong'}).encode())
